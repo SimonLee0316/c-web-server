@@ -1,16 +1,23 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <netinet/tcp.h> // 包含 TCP_CORK 定義
+#include <netinet/tcp.h>
 #include <signal.h>
+#include <sched.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include "system.h"
 
 #define PORT 9999
 #define BUFFER_SIZE 1024
 #define LISTENQ 1024
 #define PID_FILE "tmp/tcp_server.pid"
+#define MAX_WORKERS 1024
+
+int pids[MAX_WORKERS];
 
 static void usage(const char *prog)
 {
@@ -24,19 +31,16 @@ static void usage(const char *prog)
 
 static void send_signal(int signo)
 {
-    int pid = read_pidfile(PID_FILE);
-    if (pid > 0) {
-            // 發送SIGTERM信號以終止伺服器進程
-            if (kill(pid, SIGTERM) == 0) {
-                printf("Server stopped successfully.\n");
-                // 刪除PID文件
-                unlink(PID_FILE);
-            } else {
-                perror("Failed to stop the server");
-            }
-    } else {
-        fprintf(stderr, "Could not read PID or server is not running.\n");
+    int num_pids = 0;
+    read_pidfile(PID_FILE, pids, &num_pids);
+    for (int i = 0; i < num_pids; i++) {
+        if (kill(pids[i], signo) == 0) {
+            printf("Stopped process %d successfully.\n", pids[i]);
+        } else {
+            perror("Failed to stop the process");
+        }
     }
+    unlink(PID_FILE);
 }
 
 int tcp_srv_init(int port) {
@@ -85,6 +89,7 @@ void handle_client(int connfd) {
     char buffer[BUFFER_SIZE];
     int bytes_read;
 
+    printf("accept request, fd is %d, pid is %d\n", connfd, getpid());
     // 讀取客戶端的請求
     bytes_read = read(connfd, buffer, BUFFER_SIZE - 1);
     if (bytes_read < 0) {
@@ -129,6 +134,31 @@ void worker_process_cycle(int listenfd) {
     }
 }
 
+void create_workers(int listenfd, int num_workers) {
+
+    for (int i = 0; i < num_workers; i++) {
+        pid_t pid = fork();
+        if (pid == 0) {  // Child
+            cpu_set_t cpuset;
+            CPU_ZERO(&cpuset);
+            CPU_SET(i % num_workers, &cpuset);
+            if (sched_setaffinity(0, sizeof(cpu_set_t), &cpuset) < 0) {
+                perror("Could not set CPU affinity");
+                exit(1);
+            }
+            worker_process_cycle(listenfd);
+            
+        } else if (pid > 0) {  // Parent
+            pids[i] = pid;
+            printf("Child process %d created and assigned to CPU %d\n", pid, i % num_workers);
+        } else {
+            perror("Fork failed");
+        }
+    }
+    create_pidfile(PID_FILE, pids, num_workers);
+    // Parent process waits for children to exit
+    while (wait(NULL) > 0);
+}
 int main(int argc, char** argv) {
 
     if (argc != 2) {
@@ -150,9 +180,9 @@ int main(int argc, char** argv) {
     // 使用tcp_srv_init初始化伺服器
     int listenfd = tcp_srv_init(PORT);
 
-    create_pidfile(PID_FILE);
-    // 啟動工作進程循環
-    worker_process_cycle(listenfd);
+    int num_workers = sysconf(_SC_NPROCESSORS_ONLN);
+    create_workers(listenfd, num_workers);
+
 
     // 關閉伺服器socket
     close(listenfd);
