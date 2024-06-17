@@ -10,6 +10,10 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include "system.h"
+#include "coro.h"
+#include "task.h"
+
+
 
 #define PORT 9999
 #define BUFFER_SIZE 1024
@@ -85,7 +89,8 @@ int tcp_srv_init(int port) {
     return listenfd;
 }
 
-void handle_client(int connfd) {
+void handle_client(void *udata) {
+    int connfd = *(int *) udata;
     char buffer[BUFFER_SIZE];
     int bytes_read;
 
@@ -99,8 +104,8 @@ void handle_client(int connfd) {
     }
 
     // 簡單地打印請求內容
-    buffer[bytes_read] = '\0';
-    printf("Received request:\n%s\n", buffer);
+    // buffer[bytes_read] = '\0';
+    // printf("Received request:\n%s\n", buffer);
 
     // 構建HTTP響應
     char *response =
@@ -117,11 +122,12 @@ void handle_client(int connfd) {
     close(connfd);
 }
 
-void worker_process_cycle(int listenfd) {
+void worker_process_cycle(void *udata) {
+    int listenfd = *(int *) udata;
     int connfd;
     struct sockaddr_in client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
-
+    printf("worker_process_cycle\n");
     // 處理客戶端連接
     while (1) {
         connfd = accept(listenfd, (struct sockaddr *)&client_addr, &client_addr_len);
@@ -129,8 +135,8 @@ void worker_process_cycle(int listenfd) {
             perror("Accept failed");
             continue;
         }
-        handle_client(connfd);
-        close(connfd);
+        quick_start(handle_client, co_cleanup, &(int){connfd});
+        task_yield();
     }
 }
 
@@ -146,7 +152,7 @@ void create_workers(int listenfd, int num_workers) {
                 perror("Could not set CPU affinity");
                 exit(1);
             }
-            worker_process_cycle(listenfd);
+            quick_start(worker_process_cycle, co_cleanup, &(int){listenfd});
             
         } else if (pid > 0) {  // Parent
             pids[i] = pid;
@@ -159,6 +165,7 @@ void create_workers(int listenfd, int num_workers) {
     // Parent process waits for children to exit
     while (wait(NULL) > 0);
 }
+
 int main(int argc, char** argv) {
 
     if (argc != 2) {

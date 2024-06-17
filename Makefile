@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -g
 TARGET = tcp_server
-SRCS = main.c system.c
+SRCS = main.c system.c task.c
 OBJS = $(SRCS:.c=.o)
 
 all: $(TARGET)
