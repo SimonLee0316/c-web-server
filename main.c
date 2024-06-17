@@ -127,7 +127,7 @@ void worker_process_cycle(void *udata) {
     int connfd;
     struct sockaddr_in client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
-    printf("worker_process_cycle\n");
+    // printf("worker_process_cycle\n");
     // 處理客戶端連接
     while (1) {
         connfd = accept(listenfd, (struct sockaddr *)&client_addr, &client_addr_len);
