@@ -51,25 +51,25 @@ int tcp_srv_init(int port) {
     int listenfd, optval = 1;
     struct sockaddr_in server_addr;
 
-    /* 創建伺服器socket */
+    /* Create server socket */
     if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         perror("Could not create socket");
         return -1;
     }
 
-    /* 消除綁定過程中的“地址已在使用”錯誤 */
+    /* Eliminate 'Address already in use' error during the binding process */
     if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval, sizeof(int)) < 0) {
         perror("Set socket option SO_REUSEADDR failed");
         return -1;
     }
 
-    /* 設置TCP_CORK選項 */
+    /* Setting TCP_CORK option */
     if (setsockopt(listenfd, IPPROTO_TCP, TCP_CORK, (const void *)&optval, sizeof(int)) < 0) {
         perror("Set socket option TCP_CORK failed");
         return -1;
     }
 
-    /* 將伺服器socket綁定到指定端口和地址 */
+    /* Bind the server socket to the specified port and address */
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -79,7 +79,7 @@ int tcp_srv_init(int port) {
         return -1;
     }
 
-    /* 使其成為一個監聽socket，準備接受連接請求 */
+    /* Make it a listening socket, ready to accept connection requests */
     if (listen(listenfd, LISTENQ) < 0) {
         perror("Listen failed");
         return -1;
@@ -95,7 +95,7 @@ void handle_client(void *udata) {
     int bytes_read;
 
     printf("accept request, fd is %d, pid is %d\n", connfd, getpid());
-    // 讀取客戶端的請求
+    // read client request
     bytes_read = read(connfd, buffer, BUFFER_SIZE - 1);
     if (bytes_read < 0) {
         perror("Failed to read from socket");
@@ -103,11 +103,11 @@ void handle_client(void *udata) {
         return;
     }
 
-    // 簡單地打印請求內容
+    //簡單地打印請求內容
     // buffer[bytes_read] = '\0';
     // printf("Received request:\n%s\n", buffer);
 
-    // 構建HTTP響應
+    // build http response
     char *response =
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: text/html\r\n"
@@ -115,10 +115,10 @@ void handle_client(void *udata) {
         "\r\n"
         "Hello, world!";
 
-    // 發送HTTP響應給客戶端
+    // send http response to client
     write(connfd, response, strlen(response));
 
-    // 關閉客戶端連接
+    // close client connect
     close(connfd);
 }
 
@@ -127,8 +127,8 @@ void worker_process_cycle(void *udata) {
     int connfd;
     struct sockaddr_in client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
-    // printf("worker_process_cycle\n");
-    // 處理客戶端連接
+    
+    // accept cilent request
     while (1) {
         connfd = accept(listenfd, (struct sockaddr *)&client_addr, &client_addr_len);
         if (connfd < 0) {
@@ -136,7 +136,7 @@ void worker_process_cycle(void *udata) {
             continue;
         }
         quick_start(handle_client, co_cleanup, &(int){connfd});
-        task_yield();
+        task_yield(); // Re-enqueue
     }
 }
 
