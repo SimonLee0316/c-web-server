@@ -136,7 +136,6 @@ void worker_process_cycle(void *udata) {
             continue;
         }
         quick_start(handle_client, co_cleanup, &(int){connfd});
-        task_yield(); // Re-enqueue
     }
 }
 
