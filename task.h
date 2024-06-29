@@ -7,11 +7,11 @@
 #define TASK_MINSTACKSIZE 131072 /* Recommended minimum stack size */
 
 struct task_desc {
-    void *stack;
-    size_t stack_size;
-    void (*entry)(void *udata);
-    void (*cleanup)(void *stack, size_t stack_size, void *udata);
-    void *udata;
+  void *stack;
+  size_t stack_size;
+  void (*entry)(void *udata);
+  void (*cleanup)(void *stack, size_t stack_size, void *udata);
+  void *udata;
 };
 
 /* Starts a new coroutine with the provided description. */
