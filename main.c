@@ -183,13 +183,13 @@ int main(int argc, char **argv) {
     usage(argv[0]);
     return 1;
   }
-  // 使用tcp_srv_init初始化伺服器
+  // initial server
   int listenfd = tcp_srv_init(PORT);
 
   int num_workers = sysconf(_SC_NPROCESSORS_ONLN);
   create_workers(listenfd, num_workers);
 
-  // 關閉伺服器socket
+  // close server socket
   close(listenfd);
 
   return 0;
